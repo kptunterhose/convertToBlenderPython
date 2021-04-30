@@ -1,60 +1,77 @@
-#!/bin/bash/python3
+#!/usr/bin/python3
 import sys
+import numpy as np
+from scipy.optimize import minimize
+
+ONEFILE = True
 
 symbolToName = {
-  'H': 'Wasserstoff', 'He': 'Helium',
-  'Li': 'Lithium', 'Be': 'Berillium', 'B': 'Bor', 'C': 'Kohlenstoff', 'N': 'Stickstoff', 'O': 'Sauerstoff',
-  'F': 'Flour', 'Ne': 'Neon',
-  'Na': 'Natrium', 'Mg': 'Magnesium', 'Al': 'Aluminium', 'Si': 'Silizium', 'P': 'Phosphor', 'S': 'Schwefel',
-  'Cl': 'Chlor', 'Ar': 'Argon',
-  'K': 'Kalium', 'Ca': 'Kalzium', 'Sc': 'Scandium', 'Ti': 'Titan', 'V': 'Vanadium', 'Cr': 'Chrom', 'Mn': 'Mangan',
-  'Fe': 'Eisen', 'Co': 'Kobalt', 'Ni': 'Nickel', 'Cu': 'Kupfer', 'Zn': 'Zink', 'Ga': 'Gallium', 'Ge': 'Germanium',
-  'As': 'Arsen', 'Se': 'Selen', 'Br': 'Brom', 'Kr': 'Krypton',
-  'Rb': 'Rubidium', 'Sr': 'Strontium', 'Y': 'Yttrium', 'Zr': 'Zirconium', 'Nb': 'Niob', 'Mo': 'Molybdän',
-  'Tc': 'Techneticum', 'Ru': 'Ruthenium', 'Rh': 'Rhodium', 'Pd': 'Palladium', 'Ag': 'Silber', 'Cd': 'Cadmium',
-  'In': 'Indium', 'Sn': 'Zinn', 'Sb': 'Antimon', 'Te': 'Tellur', 'I': 'Jod', 'Xe': 'Xenon',
-  'Cs': 'Caesium', 'Ba': 'Barium', 'La': 'Lanthan', 'Ce': 'Cer', 'Pr': 'Praseodym', 'Nd': 'Neodym', 'Pm': 'Promethium',
-  'Sm': 'Samarium', 'Eu': 'Europium', 'Gd': 'Gadolinium', 'Tb': 'Terbium', 'Dy': 'Dysprosium', 'Ho': 'Holmium',
-  'Er': 'Erbium', 'Tm': 'Thulium', 'Yb': 'Ytterbium', 'Lu': 'Lutetium', 'Hf': 'Hafnium', 'Ta': 'Tantal', 'W': 'Wolfram',
-  'Re': 'Rhenium', 'Os': 'Osmium', 'Ir': 'Iridium', 'Pt': 'Platin', 'Au': 'Gold', 'Hg': 'Quecksilber', 'Tl': 'Thallium',
-  'Pb': 'Blei', 'Bi': 'Bismut', 'Po': 'Polonium', 'At': 'Astat', 'Rn': 'Radon',
-  'Fr': 'Francium', 'Ra': 'Radium', 'Ac': 'Acinium', 'Th': 'Thorium', 'Pa': 'Proactinium', 'U': 'Uran',
-  'Np': 'Neptunium', 'Pu': 'Plutonium', 'Am': 'Americium', 'Cm': 'Curium', 'Bk': 'Berkelium', 'Cf': 'Californium',
-  'Es': 'Einsteinium', 'Fm': 'Fermium', 'Md': 'Mendelevium', 'No': 'Nobelium', 'Lr': 'Lawrencium',
-  'Rf': 'Rutherfordium', 'Db': 'Dubnium', 'Sg': 'Seaborgium', 'Bh': 'Bohrium', 'Hs': 'Hassium', 'Mt': 'Meitnerium',
-  'Ds': 'Darmstadtium', 'Rg': 'Roentgenium', 'Cn': 'Copernicum', 'Nh': 'Nihonium', 'Fl': 'Flerovium', 'Mc': 'Moscovium',
-  'Lv': 'Livermorium', 'Ts': 'Tenness', 'Og': 'Oganesson'
+    'H': 'Wasserstoff', 'He': 'Helium',
+    'Li': 'Lithium', 'Be': 'Berillium', 'B': 'Bor', 'C': 'Kohlenstoff', 'N': 'Stickstoff', 'O': 'Sauerstoff',
+    'F': 'Flour', 'Ne': 'Neon',
+    'Na': 'Natrium', 'Mg': 'Magnesium', 'Al': 'Aluminium', 'Si': 'Silizium', 'P': 'Phosphor', 'S': 'Schwefel',
+    'Cl': 'Chlor', 'Ar': 'Argon',
+    'K': 'Kalium', 'Ca': 'Kalzium', 'Sc': 'Scandium', 'Ti': 'Titan', 'V': 'Vanadium', 'Cr': 'Chrom', 'Mn': 'Mangan',
+    'Fe': 'Eisen', 'Co': 'Kobalt', 'Ni': 'Nickel', 'Cu': 'Kupfer', 'Zn': 'Zink', 'Ga': 'Gallium', 'Ge': 'Germanium',
+    'As': 'Arsen', 'Se': 'Selen', 'Br': 'Brom', 'Kr': 'Krypton',
+    'Rb': 'Rubidium', 'Sr': 'Strontium', 'Y': 'Yttrium', 'Zr': 'Zirconium', 'Nb': 'Niob', 'Mo': 'Molybdän',
+    'Tc': 'Techneticum', 'Ru': 'Ruthenium', 'Rh': 'Rhodium', 'Pd': 'Palladium', 'Ag': 'Silber', 'Cd': 'Cadmium',
+    'In': 'Indium', 'Sn': 'Zinn', 'Sb': 'Antimon', 'Te': 'Tellur', 'I': 'Jod', 'Xe': 'Xenon',
+    'Cs': 'Caesium', 'Ba': 'Barium', 'La': 'Lanthan', 'Ce': 'Cer', 'Pr': 'Praseodym', 'Nd': 'Neodym',
+    'Pm': 'Promethium',
+    'Sm': 'Samarium', 'Eu': 'Europium', 'Gd': 'Gadolinium', 'Tb': 'Terbium', 'Dy': 'Dysprosium', 'Ho': 'Holmium',
+    'Er': 'Erbium', 'Tm': 'Thulium', 'Yb': 'Ytterbium', 'Lu': 'Lutetium', 'Hf': 'Hafnium', 'Ta': 'Tantal',
+    'W': 'Wolfram',
+    'Re': 'Rhenium', 'Os': 'Osmium', 'Ir': 'Iridium', 'Pt': 'Platin', 'Au': 'Gold', 'Hg': 'Quecksilber',
+    'Tl': 'Thallium',
+    'Pb': 'Blei', 'Bi': 'Bismut', 'Po': 'Polonium', 'At': 'Astat', 'Rn': 'Radon',
+    'Fr': 'Francium', 'Ra': 'Radium', 'Ac': 'Acinium', 'Th': 'Thorium', 'Pa': 'Proactinium', 'U': 'Uran',
+    'Np': 'Neptunium', 'Pu': 'Plutonium', 'Am': 'Americium', 'Cm': 'Curium', 'Bk': 'Berkelium', 'Cf': 'Californium',
+    'Es': 'Einsteinium', 'Fm': 'Fermium', 'Md': 'Mendelevium', 'No': 'Nobelium', 'Lr': 'Lawrencium',
+    'Rf': 'Rutherfordium', 'Db': 'Dubnium', 'Sg': 'Seaborgium', 'Bh': 'Bohrium', 'Hs': 'Hassium', 'Mt': 'Meitnerium',
+    'Ds': 'Darmstadtium', 'Rg': 'Roentgenium', 'Cn': 'Copernicum', 'Nh': 'Nihonium', 'Fl': 'Flerovium',
+    'Mc': 'Moscovium',
+    'Lv': 'Livermorium', 'Ts': 'Tenness', 'Og': 'Oganesson'
 }
 symbolToNumber = {
-  'H': 1, 'He': 2,
-  'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9, 'Ne': 10,
-  'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15, 'S': 16, 'Cl': 17, 'Ar': 18,
-  'K': 19, 'Ca': 20, 'Sc': 21, 'Ti': 22, 'V': 23, 'Cr': 24, 'Mn': 25, 'Fe': 26, 'Co': 27, 'Ni': 28, 'Cu': 29, 'Zn': 30,
-  'Ga': 31, 'Ge': 32, 'As': 33, 'Se': 34, 'Br': 35, 'Kr': 36,
-  'Rb': 37, 'Sr': 38, 'Y': 39, 'Zr': 40, 'Nb': 41, 'Mo': 42, 'Tc': 43, 'Ru': 44, 'Rh': 45, 'Pd': 46, 'Ag': 47, 'Cd': 48,
-  'In': 49, 'Sn': 50, 'Sb': 51, 'Te': 52, 'I': 53, 'Xe': 54,
-  'Cs': 55, 'Ba': 56, 'La': 57, 'Ce': 58, 'Pr': 59, 'Nd': 60, 'Pm': 61, 'Sm': 62, 'Eu': 63, 'Gd': 64, 'Tb': 65,
-  'Dy': 66, 'Ho': 67, 'Er': 68, 'Tm': 69, 'Yb': 70, 'Lu': 71, 'Hf': 72, 'Ta': 73, 'W': 74, 'Re': 75, 'Os': 76, 'Ir': 77,
-  'Pt': 78, 'Au': 79, 'Hg': 80, 'Tl': 81, 'Pb': 82, 'Bi': 83, 'Po': 84, 'At': 85, 'Rn': 86,
-  'Fr': 87, 'Ra': 88, 'Ac': 89, 'Th': 90, 'Pa': 91, 'U': 92,  'Np': 93, 'Pu': 94, 'Am': 95, 'Cm': 96, 'Bk': 97,
-  'Cf': 98, 'Es': 99, 'Fm': 100, 'Md': 101, 'No': 102, 'Lr': 103, 'Rf': 104, 'Db': 105, 'Sg': 106, 'Bh': 107, 'Hs': 108,
-  'Mt': 109, 'Ds': 110, 'Rg': 111, 'Cn': 112, 'Nh': 113, 'Fl': 114, 'Mc': 115, 'Lv': 116, 'Ts': 117, 'Og': 118
+    'H': 1, 'He': 2,
+    'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9, 'Ne': 10,
+    'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15, 'S': 16, 'Cl': 17, 'Ar': 18,
+    'K': 19, 'Ca': 20, 'Sc': 21, 'Ti': 22, 'V': 23, 'Cr': 24, 'Mn': 25, 'Fe': 26, 'Co': 27, 'Ni': 28, 'Cu': 29,
+    'Zn': 30,
+    'Ga': 31, 'Ge': 32, 'As': 33, 'Se': 34, 'Br': 35, 'Kr': 36,
+    'Rb': 37, 'Sr': 38, 'Y': 39, 'Zr': 40, 'Nb': 41, 'Mo': 42, 'Tc': 43, 'Ru': 44, 'Rh': 45, 'Pd': 46, 'Ag': 47,
+    'Cd': 48,
+    'In': 49, 'Sn': 50, 'Sb': 51, 'Te': 52, 'I': 53, 'Xe': 54,
+    'Cs': 55, 'Ba': 56, 'La': 57, 'Ce': 58, 'Pr': 59, 'Nd': 60, 'Pm': 61, 'Sm': 62, 'Eu': 63, 'Gd': 64, 'Tb': 65,
+    'Dy': 66, 'Ho': 67, 'Er': 68, 'Tm': 69, 'Yb': 70, 'Lu': 71, 'Hf': 72, 'Ta': 73, 'W': 74, 'Re': 75, 'Os': 76,
+    'Ir': 77,
+    'Pt': 78, 'Au': 79, 'Hg': 80, 'Tl': 81, 'Pb': 82, 'Bi': 83, 'Po': 84, 'At': 85, 'Rn': 86,
+    'Fr': 87, 'Ra': 88, 'Ac': 89, 'Th': 90, 'Pa': 91, 'U': 92, 'Np': 93, 'Pu': 94, 'Am': 95, 'Cm': 96, 'Bk': 97,
+    'Cf': 98, 'Es': 99, 'Fm': 100, 'Md': 101, 'No': 102, 'Lr': 103, 'Rf': 104, 'Db': 105, 'Sg': 106, 'Bh': 107,
+    'Hs': 108,
+    'Mt': 109, 'Ds': 110, 'Rg': 111, 'Cn': 112, 'Nh': 113, 'Fl': 114, 'Mc': 115, 'Lv': 116, 'Ts': 117, 'Og': 118
 }
 numberToSymbol = {
-  1: 'H', 2: 'He',
-  3: 'Li', 4: 'Be', 5: 'B', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 10: 'Ne',
-  11: 'Na', 12: 'Mg', 13: 'Al', 14: 'Si', 15: 'P', 16: 'S', 17: 'Cl', 18: 'Ar',
-  19: 'K', 20: 'Ca', 21: 'Sc', 22: 'Ti', 23: 'V', 24: 'Cr', 25: 'Mn', 26: 'Fe', 27: 'Co', 28: 'Ni', 29: 'Cu', 30: 'Zn',
-  31: 'Ga', 32: 'Ge', 33: 'As', 34: 'Se', 35: 'Br', 36: 'Kr',
-  37: 'Rb', 38: 'Sr', 39: 'Y', 40: 'Zr', 41: 'Nb', 42: 'Mo', 43: 'Tc', 44: 'Ru', 45: 'Rh', 46: 'Pd', 47: 'Ag', 48: 'Cd',
-  49: 'In', 50: 'Sn', 51: 'Sb', 52: 'Te', 53: 'I', 54: 'Xe',
-  55: 'Cs', 56: 'Ba', 57: 'La', 58: 'Ce', 59: 'Pr', 60: 'Nd', 61: 'Pm', 62: 'Sm', 63: 'Eu', 64: 'Gd', 65: 'Tb',
-  66: 'Dy', 67: 'Ho', 68: 'Er', 69: 'Tm', 70: 'Yb', 71: 'Lu', 72: 'Hf', 73: 'Ta', 74: 'W', 75: 'Re', 76: 'Os', 77: 'Ir',
-  78: 'Pt', 79: 'Au', 80: 'Hg', 81: 'Tl', 82: 'Pb', 83: 'Bi', 84: 'Po', 85: 'At', 86: 'Rn',
-  87: 'Fr', 88: 'Ra', 89: 'Ac', 90: 'Th', 91: 'Pa', 92: 'U',  93: 'Np', 94: 'Pu', 95: 'Am', 96: 'Cm', 97: 'Bk',
-  98: 'Cf', 99: 'Es', 100: 'Fm', 101: 'Md', 102: 'No', 103: 'Lr', 104: 'Rf', 105: 'Db', 106: 'Sg', 107: 'Bh', 108: 'Hs',
-  109: 'Mt', 110: 'Ds', 111: 'Rg', 112: 'Cn', 113: 'Nh', 114: 'Fl', 115: 'Mc', 116: 'Lv', 117: 'Ts', 118: 'Og'
+    1: 'H', 2: 'He',
+    3: 'Li', 4: 'Be', 5: 'B', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 10: 'Ne',
+    11: 'Na', 12: 'Mg', 13: 'Al', 14: 'Si', 15: 'P', 16: 'S', 17: 'Cl', 18: 'Ar',
+    19: 'K', 20: 'Ca', 21: 'Sc', 22: 'Ti', 23: 'V', 24: 'Cr', 25: 'Mn', 26: 'Fe', 27: 'Co', 28: 'Ni', 29: 'Cu',
+    30: 'Zn',
+    31: 'Ga', 32: 'Ge', 33: 'As', 34: 'Se', 35: 'Br', 36: 'Kr',
+    37: 'Rb', 38: 'Sr', 39: 'Y', 40: 'Zr', 41: 'Nb', 42: 'Mo', 43: 'Tc', 44: 'Ru', 45: 'Rh', 46: 'Pd', 47: 'Ag',
+    48: 'Cd',
+    49: 'In', 50: 'Sn', 51: 'Sb', 52: 'Te', 53: 'I', 54: 'Xe',
+    55: 'Cs', 56: 'Ba', 57: 'La', 58: 'Ce', 59: 'Pr', 60: 'Nd', 61: 'Pm', 62: 'Sm', 63: 'Eu', 64: 'Gd', 65: 'Tb',
+    66: 'Dy', 67: 'Ho', 68: 'Er', 69: 'Tm', 70: 'Yb', 71: 'Lu', 72: 'Hf', 73: 'Ta', 74: 'W', 75: 'Re', 76: 'Os',
+    77: 'Ir',
+    78: 'Pt', 79: 'Au', 80: 'Hg', 81: 'Tl', 82: 'Pb', 83: 'Bi', 84: 'Po', 85: 'At', 86: 'Rn',
+    87: 'Fr', 88: 'Ra', 89: 'Ac', 90: 'Th', 91: 'Pa', 92: 'U', 93: 'Np', 94: 'Pu', 95: 'Am', 96: 'Cm', 97: 'Bk',
+    98: 'Cf', 99: 'Es', 100: 'Fm', 101: 'Md', 102: 'No', 103: 'Lr', 104: 'Rf', 105: 'Db', 106: 'Sg', 107: 'Bh',
+    108: 'Hs',
+    109: 'Mt', 110: 'Ds', 111: 'Rg', 112: 'Cn', 113: 'Nh', 114: 'Fl', 115: 'Mc', 116: 'Lv', 117: 'Ts', 118: 'Og'
 }
+
 
 def getStartLines(lines):
     startPoints = []
@@ -118,7 +135,7 @@ def getKoords(startLine):
         y = float(words[4])
         z = float(words[5])
         koords[centerNumber] = [atomicNumber, [x, y, z]]
-        lineNumber +=1
+        lineNumber += 1
     return koords
 
 
@@ -154,6 +171,170 @@ def getReaktionsPfadLines(reactionsCoords, coords4ReactionsPath):
     return linesOutput
 
 
+class RotTrans2Congruent(object):
+    alt = []
+    neu = []
+    neu_u = []
+    print_output = False
+    rot_matrix = [[1, 0, 0],
+                  [0, 1, 0],
+                  [0, 0, 1]]
+
+    def __init__(self, start_points, target_points, print_output=False):
+        self.alt = start_points
+        self.neu = target_points
+        self.neu_u = target_points
+        self.print_output = print_output
+
+    def matrix_multiplikation_3d(self, A, B):
+        # dimensionen checken
+        C = 3 * [None]
+        for i in range(3):
+            C[i] = 3 * [0]
+            for j in range(3):
+                for k in range(3):
+                    C[i][k] += A[i][j] * B[j][k]
+        return C
+
+    def matrix_mal_vektor(self, M, v):
+        n = 3 * [0]
+        for i in range(3):
+            for j in range(3):
+                n[i] += M[i][j] * v[j]
+        return n
+
+    def translation(self, transl, point):
+        p = 3 * [None]
+        if len(transl) == len(point):
+            for i in range(len(transl)):
+                p[i] = point[i] + transl[i]
+        return p
+
+    def make_rot_z(self, alpha):
+        co = float(np.cos(alpha))
+        si = float(np.sin(alpha))
+        rot = [[co, (-1 * si), 0],
+               [si, co, 0],
+               [0, 0, 1]]
+        return rot
+
+    def make_rot_y(self, alpha):
+        co = float(np.cos(alpha))
+        si = float(np.sin(alpha))
+        rot = [[co, 0, si],
+               [0, 1, 0],
+               [(-1 * si), 0, co]]
+        return rot
+
+    def make_rot_x(self, alpha):
+        co = float(np.cos(alpha))
+        si = float(np.sin(alpha))
+        rot = [[1, 0, 0],
+               [0, co, (-1 * si)],
+               [0, si, co]]
+        return rot
+
+    def rot_um_z(self, alpha, point):
+        rot_z = self.make_rot_z(alpha)
+        n = self.matrix_mal_vektor(rot_z, point)
+        return n
+
+    def rot_um_y(self, alpha, point):
+        rot_y = self.make_rot_y(alpha)
+        n = self.matrix_mal_vektor(rot_y, point)
+        return n
+
+    def rot_um_x(self, alpha, point):
+        rot_x = self.make_rot_x(alpha)
+        n = self.matrix_mal_vektor(rot_x, point)
+        return n
+
+    def equation_to_solve_z(self, alpha):
+        alt_rot = len(self.alt) * [None]
+        for i in range(len(self.alt)):
+            alt_rot[i] = self.rot_um_z(alpha, self.alt[i])
+        diff = 0
+        for i in range(len(self.alt)):
+            for j in range(3):
+                diff += (self.neu[i][j] - alt_rot[i][j]) ** 2
+        return diff
+
+    def equation_to_solve_y(self, alpha):
+        alt_rot = len(self.alt) * [None]
+        for i in range(len(self.alt)):
+            alt_rot[i] = self.rot_um_y(alpha, self.alt[i])
+        diff = 0
+        for i in range(len(self.alt)):
+            for j in range(3):
+                diff += (self.neu[i][j] - alt_rot[i][j]) ** 2
+        return diff
+
+    def equation_to_solve_x(self, alpha):
+        alt_rot = len(self.alt) * [None]
+        for i in range(len(self.alt)):
+            alt_rot[i] = self.rot_um_x(alpha, self.alt[i])
+        diff = 0
+        for i in range(len(self.alt)):
+            for j in range(3):
+                diff += (self.neu[i][j] - alt_rot[i][j]) ** 2
+        return diff
+
+    def calc_rot_trans(self, n_steps_max=10):
+        # translation of old --> origin
+        trans_alt = 3 * [None]
+        for i in range(len(self.alt[0])):
+            trans_alt[i] = -1 * self.alt[0][i]
+
+        # tralnslation of target --> origin --> back
+        trans_neu = 3 * [None]
+        trans_neu_revers = 3 * [None]
+        for i in range(len(self.neu[0])):
+            trans_neu[i] = -1 * self.neu[0][i]
+            trans_neu_revers[i] = self.neu[0][i]
+        # do translation of both melekules to origin
+        for i in range(len(self.alt)):
+            self.alt[i] = self.translation(trans_alt, self.alt[i])
+
+        for i in range(len(self.neu)):
+            self.neu[i] = self.translation(trans_neu, self.neu[i])
+
+        # init params of omptimization
+        alpha_z = []
+        alpha_y = []
+        alpha_x = []
+
+        # rotation wit max numer of Steps
+        for n in range(n_steps_max):
+            solution_z = minimize(self.equation_to_solve_y, 0, method='Nelder-Mead')
+            alpha_z.append(float(solution_z['x']))
+            self.rot_matrix = self.matrix_multiplikation_3d(self.make_rot_z(float(solution_z['x'])), self.rot_matrix)
+            for i in range(len(self.alt)):
+                self.alt[i] = self.rot_um_z(alpha_z[n], self.alt[i])
+            solution_y = minimize(self.equation_to_solve_y, 0, method='Nelder-Mead')
+            alpha_y.append(float(solution_y['x']))
+            self.rot_matrix = self.matrix_multiplikation_3d(self.make_rot_y(float(solution_y['x'])), self.rot_matrix)
+            for i in range(len(self.alt)):
+                self.alt[i] = self.rot_um_y(alpha_y[n], self.alt[i])
+            solution_x = minimize(self.equation_to_solve_x, 0, method='Nelder-Mead')
+            alpha_x.append(float(solution_x['x']))
+            self.rot_matrix = self.matrix_multiplikation_3d(self.make_rot_x(float(solution_x['x'])), self.rot_matrix)
+            for i in range(len(self.alt)):
+                self.alt[i] = self.rot_um_x(alpha_x[n], self.alt[i])
+
+        final_translation = self.translation(trans_neu_revers, self.matrix_mal_vektor(self.rot_matrix, trans_alt))
+
+        # print out results
+        if self.print_output:
+            print('\nfirst rotation with: ')
+            for i in range(len(self.rot_matrix)):
+                print('%9.6f %9.6f %9.6f' % (self.rot_matrix[i][0], self.rot_matrix[i][1], self.rot_matrix[i][2]))
+            print('\nthen, translation with:')
+            for i in range(len(final_translation)):
+                print('%9.6f' % final_translation[i])
+            print('\n--- finished ---')
+        return self.rot_matrix, final_translation
+
+
 content1 = '''
 import numpy as np
 BLENDER = True
@@ -162,7 +343,7 @@ if BLENDER:
 
 scaleFactorExpToBlenderAtoms = .015
 scaleFactorSingleBond = .07  # Depth in Blender
-maxDistanceForSingleBond = 145.  # Anström
+maxDistanceForSingleBond = 160.  # Anström
 smoothnessOfAtoms = 3
 
 
@@ -460,9 +641,12 @@ COLOR_RGB255 = {
     'Lila10': (242, 240, 247, 255)
 }
 COLORATOM = {
-    'Kohlenstoff': color255to1(COLOR_RGB255['Schwarz100']),
     'Wasserstoff': color255to1(COLOR_RGB255['Schwarz10']),
+    'Lithium': color255to1(COLOR_RGB255['Lila100']),
+    'Kohlenstoff': color255to1(COLOR_RGB255['Schwarz100']),
+    'Stickstoff': color255to1(COLOR_RGB255['Blau100']),
     'Sauerstoff': color255to1(COLOR_RGB255['Rot100']),
+    'Flour': color255to1(COLOR_RGB255['Grun75']),
     'Chlor': color255to1(COLOR_RGB255['Grun100']),
     'Bindung': color255to1(COLOR_RGB255['Schwarz50'])
 }
@@ -937,28 +1121,26 @@ if __name__ == '__main__':
         bond.makeAnimation()
 '''
 
-
-
-
-
-
-
 if __name__ == '__main__':
     if len(sys.argv) == 2:
-        inFileName = sys.argv[1]
+        inFileName_part_one = sys.argv[1]
+    elif len(sys.argv) == 3:
+        ONEFILE = False
+        inFileName_part_one = sys.argv[1]
+        inFileName_part_two = sys.argv[2]
     else:
-        inFileName = 'Veresterung_irc.log'
-        #inFileName = input('pleas enter file name of gaussian file:\n')
+        # inFileName = 'Veresterung_irc.log'
+        inFileName_part_one = input('please enter file name of gaussian file:\n')
 
     VERBOSE = False
     DIRECTION = 1  # 1 OR -1
     coords4RC = {}
-    inFile = open(inFileName, 'r')
+
+    inFile = open(inFileName_part_one, 'r')
     allLines = inFile.readlines()
     startConfig, rcs = getStartGeometry(allLines=allLines)
 
-
-    outFileName = inFileName.split('.')[0] + '_blender.py'
+    outFileName = inFileName_part_one.split('.')[0] + '_blender.py'
     outFile = open(outFileName, 'w')
 
     outFile.write(content1)
@@ -970,12 +1152,67 @@ if __name__ == '__main__':
     for line in getReaktionsPfadLines(rcs, coords4RC):
         outFile.write(line)
 
+    if not ONEFILE:
+        if VERBOSE:
+            print('start with second file')
+
+        compare_geometry = coords4RC[0]
+        old_reactions_coordinate = 0
+        for reactions_coordinate in coords4RC:
+            if reactions_coordinate > old_reactions_coordinate:
+                old_reactions_coordinate = reactions_coordinate
+                compare_geometry = coords4RC[reactions_coordinate]
+        reactions_coordinate_shift = abs(reactions_coordinate)
+        coords4RC = {}
+        in_file_part_two = open(inFileName_part_two, 'r')
+        allLines = in_file_part_two.readlines()
+
+        startConfig_part_two, rcs_part_two = getStartGeometry(allLines=allLines)
+        compare_geometry_part_two = coords4RC[0]
+        old_reactions_coordinate = 0
+        for reactions_coordinate in coords4RC:
+            if reactions_coordinate < old_reactions_coordinate:
+                old_reactions_coordinate = reactions_coordinate
+                compare_geometry_part_two = coords4RC[reactions_coordinate]
+        reactions_coordinate_shift += abs(reactions_coordinate)
+        # calc rot und move matrixes --> min distance of coords of first 6 atoms
+        start_points = []
+        for i in range(1, 7):
+            start_points.append(compare_geometry_part_two[i][1])
+        target_points = []
+        for i in range(1, 7):
+            target_points.append(compare_geometry[i][1])
+
+        test = RotTrans2Congruent(start_points, target_points)
+        rot, trans = test.calc_rot_trans()
+
+        # make rot and trans
+        # xyz = test.matrix_mal_vector(rot, xyz)
+        # xyz = test.translation(trans, xyz)
+        # print xyz
+        for line in getReaktionsPfadLines(rcs_part_two, coords4RC):
+            try:
+                #print(len(line.split()))
+                n = int(line.split()[0])
+                x = float(line.split()[1])
+                y = float(line.split()[2])
+                z = float(line.split()[3])
+                vector = [x, y, z]
+                vector = test.matrix_mal_vektor(rot, vector)
+                vector = test.translation(trans, vector)
+                line = str(n) + ' ' + str(vector[0]) + ' ' + str(vector[1]) + ' ' + str(vector[2]) + '\n'
+                outFile.write(line)
+            except ValueError:
+                shift = float(line.split()[2]) + reactions_coordinate_shift
+                line = 'reactions Coordinate: '
+                line += str(shift)
+                line += ' Energie: \n'
+                #'change the reactionscoordinate '
+                outFile.write(line)
+
     outFile.write(content3)
     outFile.close()
     print('write output to ' + outFileName)
-
-
-
 
 '''
 listOfAtoms = set()
