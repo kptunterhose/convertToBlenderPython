@@ -189,6 +189,14 @@ listOfEsters = {
     'Propansäureetyhlester': 'H3CCH2COOCH2CH3',
     'Propansäurepropylester': 'H3CCH2COOCH2CH2CH3',
 }
+listOfReactions = {
+    'Chlorwasserstoff': "HCl",
+    'Nitrit': 'NO2-',
+    'Benzol': 'C6H6',
+    'Wasser': 'H2O',
+    '1-Brom-ethylbenzol': 'BrC8H9'
+}
+
 
 dictOfAll = {
     'Alkane': listOfAlkans,
@@ -199,7 +207,8 @@ dictOfAll = {
     'Ketone': listOfKetons,
     'Carbonsäuren': listOfCarbonsaeuren,
     'Ether': listOfEthers,
-    'Ester': listOfEsters
+    'Ester': listOfEsters,
+    'Reaktionen': listOfReactions
 }
 
 for klasse in dictOfAll:
