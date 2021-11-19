@@ -1,20 +1,92 @@
+"""
+Copy this script in the folder with the .orb fils.
+If you don't want all orbitals add option -o and after its the list of wanted orbitals
+e.g. python final_ReadOrbitalFilesForBlender.py -o 9 12 15
+"""
+
+
+
+import sys
 import os
+import json
+TEST = False
 
+listOfNames = []
+dOrbs = {}
+content1 = '''
+import bpy
 
-TEST = True
-BLENDER = False
-if BLENDER:
-    import bpy
+CollectionName = 'Orbital'
 
+dOrbs = '''
 
-COLOR = {
-    'pos': (1, 0, 0, .25),
-    'neg': (0, 0, 1, .25)
+content2 = """
+material_pos = bpy.data.materials.new(name='material-pos')
+material_pos.diffuse_color = (1,0,0,.25)
+material_neg = bpy.data.materials.new(name='material-neg')
+material_neg.diffuse_color = (0,0,1,.25)
+
+material = {
+    'pos': material_pos,
+    'neg': material_neg
 }
 
-dictPosOrbitals = {}
-dictNegOrbitals = {}
-listOfNames = []
+
+try: 
+    bpy.data.collections['Orbital']
+except KeyError:
+    orbitalCollection = bpy.data.collections.new(CollectionName)
+    bpy.context.scene.collection.children.link(orbitalCollection)
+
+
+for orbital in dOrbs:
+    for sign in dOrbs[orbital]:
+        dOrbs[orbital][sign]['mesh'] = bpy.data.meshes.new(str(orbital) + sign + '_mesh')
+        dOrbs[orbital][sign]['mesh'].from_pydata(dOrbs[orbital][sign]['verts'], [], dOrbs[orbital][sign]['faces'])
+        dOrbs[orbital][sign]['obj'] = bpy.data.objects.new(str(orbital) + sign , dOrbs[orbital][sign]['mesh'])
+        dOrbs[orbital][sign]['obj'].data.materials.append(material[sign])
+        dOrbs[orbital][sign]['obj'].scale = [.5, .5, .5]
+        bpy.data.collections[CollectionName].objects.link(dOrbs[orbital][sign]['obj'])
+"""
+
+
+def readOrbitalFromFiles(listOfOrbitalNames, onlySomeOrbitals = []):
+    for orbitalName in listOfOrbitalNames:
+        add = False
+        if len(onlySomeOrbitals) == 0:
+            add = True
+        else:
+            for onlySome in onlySomeOrbitals:
+                if 'o'+ onlySome in orbitalName:
+                    add = True
+        if add:
+            print('reading orbital: ' + orbitalName)
+            orb = Orbital(basePath + orbitalName)
+            orb.makePosNegList()
+            orb.makePosOrbs()
+            orb.makeNegOrbs()
+            dOrbs[orbitalName] = {
+                'pos': {
+                    'verts': orb.posOrbsVertices,
+                    'faces': orb.posOrbsFaces
+                },
+                'neg': {
+                    'verts': orb.negOrbsVertices,
+                    'faces': orb.negOrbsFaces
+                }
+            }
+
+
+def makePythonOutfile(outFileName):
+    outFile = open(outFileName, 'w')
+    outFile.write(content1)
+    # write orbital stuff here
+    outFile.write(json.dumps(dOrbs))
+    outFile.write(content2)
+    outFile.close()
+    print('write output to ' + outFileName)
+    return 0
+
 
 class Orbital(object):
 
@@ -91,6 +163,11 @@ class Orbital(object):
 
 
 if __name__ == '__main__':
+    onlyList = []
+    if len(sys.argv) > 2:
+        if '-o' in sys.argv:
+            onlyList = sys.argv[sys.argv.index('-o')+1:]
+    print(onlyList)
     if TEST:
         basePath = 'orbitalTestData/'
     else:
@@ -101,19 +178,7 @@ if __name__ == '__main__':
         if name.split('.')[-1] == 'orb':
             listOfOrbitalNames.append(name)
 
-    for orbitalName in listOfOrbitalNames:
-        print('reading orbital: ' + orbitalName)
-        orb = Orbital(basePath + orbitalName)
-        orb.makePosNegList()
-        orb.makePosOrbs()
-        orb.makeNegOrbs()
-        dictPosOrbitals[orbitalName] = {}
-        dictPosOrbitals[orbitalName]['verts'] = orb.posOrbsVertices
-        dictPosOrbitals[orbitalName]['faces'] = orb.posOrbsFaces
-        dictNegOrbitals[orbitalName] = {}
-        dictNegOrbitals[orbitalName]['verts'] = orb.negOrbsVertices
-        dictNegOrbitals[orbitalName]['faces'] = orb.negOrbsFaces
+    readOrbitalFromFiles(listOfOrbitalNames, onlyList)
+    makePythonOutfile(basePath + 'drawOrbitals_blender.py')
 
-    print(len(dictPosOrbitals))
-    print(len(dictNegOrbitals))
 
