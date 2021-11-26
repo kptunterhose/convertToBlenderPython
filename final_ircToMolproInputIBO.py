@@ -182,7 +182,7 @@ content2 = '''
 basis=tzvpp
 {df-rks,pbe}
 {ibba,iboexp=2, bonds=1}
-{put,xml,%s.com; keepspherical; nosort; skipvirt}
+{put,xml,%s.xml; keepspherical; nosort; skipvirt}
 '''
 
 

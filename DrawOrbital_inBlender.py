@@ -38,13 +38,18 @@ except KeyError:
 
 
 for orbital in dOrbs:
+    try:
+        bpy.data.collections[str(orbital)]
+    except KeyError:
+        singleOrbital = bpy.data.collections.new(str(orbital))
+        bpy.context.scene.collection.children[CollectionName].children.link(singleOrbital)
     for sign in dOrbs[orbital]:
         dOrbs[orbital][sign]['mesh'] = bpy.data.meshes.new(str(orbital) + sign + '_mesh')
         dOrbs[orbital][sign]['mesh'].from_pydata(dOrbs[orbital][sign]['verts'], [], dOrbs[orbital][sign]['faces'])
-        dOrbs[orbital][sign]['obj'] = bpy.data.objects.new(str(orbital) + sign , dOrbs[orbital][sign]['mesh'])
+        dOrbs[orbital][sign]['obj'] = bpy.data.objects.new(sign , dOrbs[orbital][sign]['mesh'])
         dOrbs[orbital][sign]['obj'].data.materials.append(material[sign])
         dOrbs[orbital][sign]['obj'].scale = [.5, .5, .5]
-        bpy.data.collections[CollectionName].objects.link(dOrbs[orbital][sign]['obj'])
+        singleOrbital.objects.link(dOrbs[orbital][sign]['obj'])
 
 
 
