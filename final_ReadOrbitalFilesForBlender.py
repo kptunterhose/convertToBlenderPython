@@ -2,8 +2,9 @@
 Copy this script in the folder with the .orb fils.
 If you don't want all orbitals add option -o and after its the list of wanted orbitals
 e.g. python final_ReadOrbitalFilesForBlender.py -o 9 12 15
-"""
 
+"""
+#TODO: check ob orbitals n surfaces / vorzeichen -> entsprechende objekte trennen -> für modifikation
 
 
 import sys
