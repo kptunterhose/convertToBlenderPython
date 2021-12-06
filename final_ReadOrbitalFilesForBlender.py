@@ -10,7 +10,8 @@ e.g. python final_ReadOrbitalFilesForBlender.py -o 9 12 15
 import sys
 import os
 import json
-TEST = False
+import queue as q
+TEST = True
 
 listOfNames = []
 dOrbs = {}
@@ -50,7 +51,7 @@ for orbital in dOrbs:
         dOrbs[orbital][sign]['mesh'] = bpy.data.meshes.new(str(orbital) + sign + '_mesh')
         dOrbs[orbital][sign]['mesh'].from_pydata(dOrbs[orbital][sign]['verts'], [], dOrbs[orbital][sign]['faces'])
         dOrbs[orbital][sign]['obj'] = bpy.data.objects.new(sign , dOrbs[orbital][sign]['mesh'])
-        dOrbs[orbital][sign]['obj'].data.materials.append(material[sign])
+        dOrbs[orbital][sign]['obj'].data.materials.append(material[sign.split('-')[0]])
         dOrbs[orbital][sign]['obj'].scale = [.5, .5, .5]
         singleOrbital.objects.link(dOrbs[orbital][sign]['obj'])
 """
@@ -66,21 +67,63 @@ def readOrbitalFromFiles(listOfOrbitalNames, onlySomeOrbitals = []):
                 if 'o'+ onlySome in orbitalName:
                     add = True
         if add:
+            dOrbs[orbitalName] = {}
+
             print('reading orbital: ' + orbitalName)
+
             orb = Orbital(basePath + orbitalName)
             orb.makePosNegList()
             orb.makePosOrbs()
             orb.makeNegOrbs()
-            dOrbs[orbitalName] = {
-                'pos': {
-                    'verts': orb.posOrbsVertices,
-                    'faces': orb.posOrbsFaces
-                },
-                'neg': {
-                    'verts': orb.negOrbsVertices,
-                    'faces': orb.negOrbsFaces
+            dKnotsPos = getDictOfKnots(orb.posOrbsFaces, orb.posOrbsVertices)
+            dKnotsNeg = getDictOfKnots(orb.negOrbsFaces, orb.negOrbsVertices)
+
+            dictOfSurfacesPos = getDictOfSurfaces(dKnotsPos)
+            dictOfSurfacesNeg = getDictOfSurfaces(dKnotsNeg)
+
+            dictOfFacesPos = {}
+            dictOfFacesNeg = {}
+            dictOfVertsPos = {}
+            dictOfVertsNeg = {}
+
+            for surface in dictOfSurfacesPos:
+                dictOfFacesPos[surface] = []
+                for face in orb.posOrbsFaces:
+                    for point in face:
+                        if point in dictOfSurfacesPos[surface]:
+                            dictOfFacesPos[surface].append(list(face))
+                            break
+                dictOfVertsPos[surface] = []
+                for knot in dictOfSurfacesPos[surface]:
+                    dictOfVertsPos[surface].append(orb.posOrbsVertices[knot])
+                for i in range(len(dictOfFacesPos[surface])):
+                    for ii in range(len(dictOfFacesPos[surface][i])):
+                        dictOfFacesPos[surface][i][ii] -= min(dictOfSurfacesPos[surface])
+
+            for surface in dictOfSurfacesNeg:
+                dictOfFacesNeg[surface] = []
+                for face in orb.negOrbsFaces:
+                    for point in face:
+                        if point in dictOfSurfacesNeg[surface]:
+                            dictOfFacesNeg[surface].append(list(face))
+                            break
+                dictOfVertsNeg[surface] = []
+                for knot in dictOfSurfacesNeg[surface]:
+                    dictOfVertsNeg[surface].append(orb.negOrbsVertices[knot])
+                for i in range(len(dictOfFacesNeg[surface])):
+                    for ii in range(len(dictOfFacesNeg[surface][i])):
+                        dictOfFacesNeg[surface][i][ii] -= min(dictOfSurfacesNeg[surface])
+
+            for nSurface in dictOfFacesPos:
+                dOrbs[orbitalName]['pos-' + str(nSurface)] = {
+                    'verts': dictOfVertsPos[nSurface],
+                    'faces': dictOfFacesPos[nSurface]
                 }
-            }
+            for nSurface in dictOfFacesNeg:
+                dOrbs[orbitalName]['neg-' + str(nSurface)] = {
+                    'verts': dictOfVertsNeg[nSurface],
+                    'faces': dictOfFacesNeg[nSurface]
+                }
 
 
 def makePythonOutfile(outFileName):
@@ -92,6 +135,51 @@ def makePythonOutfile(outFileName):
     outFile.close()
     print('write output to ' + outFileName)
     return 0
+
+
+def getBesucht(adj, start, suche):
+    # adj ist die Adjazenzliste {knoten: [kanten]}
+    # start ist der Index des Knoten, in dem die Suche beginnt
+    # suche ist der gesuchte Knoten
+    queue = q.Queue()
+    queue.put(start)
+    besucht = set()
+    while queue.qsize() > 0:
+        aktiverKnoten = queue.get()
+        besucht.add(aktiverKnoten)
+        for andererKnoten in adj[aktiverKnoten]:
+            if andererKnoten in besucht:
+                continue
+            if andererKnoten == suche:
+                # Knoten gefunden
+                return besucht
+            queue.put(andererKnoten)
+    return besucht
+
+
+def getDictOfKnots(listOfFaces, listOfVerts):
+    knotenDict = dict()
+    for i in range(len(listOfVerts)):
+        knotenDict[i] = set()
+        for triangle in listOfFaces:
+            if i in triangle:
+                for knot in triangle:
+                    if knot != i:
+                        knotenDict[i].add(knot)
+    return knotenDict
+
+
+def getDictOfSurfaces(knoten):
+    listOfKnots = list(knoten.keys())
+    surfaces = {}
+    nSurface = 0
+    while listOfKnots:
+        s = getBesucht(knoten, listOfKnots[0], -1)
+        for k in s:
+            listOfKnots.remove(k)
+        surfaces[nSurface] = s
+        nSurface += 1
+    return surfaces
 
 
 class Orbital(object):
