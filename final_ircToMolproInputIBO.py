@@ -1,6 +1,22 @@
 #!/usr/bin/python3
+
 import sys
 import os
+try:
+    import psi4
+    PSI4LOAD = True
+    CALCWF = False
+except ModuleNotFoundError:
+    print('''
+    Could not load/find PSI 4, so i can't do any quantum chemistry jobs.
+    If you already installd psi 4, you have to load it:
+    > conda activate p4dev
+    And rerun this script again. If you don't need PSI 4 everything 
+    is fine.
+    ''')
+    PSI4LOAD = False
+
+
 
 ONEFILE = True
 SORTandRENAME = False
@@ -167,8 +183,10 @@ def getReaktionsPfadLines(reactionsCoord, coords4ReactionsPath, startConfig):
         linesOutput.append(lineTemp)
     return linesOutput
 
+
 def sortFunction(value):
     return float(value[:-4])
+
 
 content1 = '''
 memory,200,m;
@@ -187,6 +205,10 @@ basis=tzvpp
 
 
 if __name__ == '__main__':
+    if '-wf' in sys.argv:
+        CALCWF = True
+        sys.argv.remove('-wf')
+    ### noch eine inputabfrage wie wf in sys.argv CALCWF = True
     if len(sys.argv) == 2:
         inFileName_part_one = sys.argv[1]
     elif len(sys.argv) == 3:
@@ -194,8 +216,8 @@ if __name__ == '__main__':
         inFileName_part_one = sys.argv[1]
         inFileName_part_two = sys.argv[2]
     else:
-        # inFileName = 'Veresterung_irc.log'
-        inFileName_part_one = input('please enter file name of gaussian file:\n')
+        inFileName_part_one = 'Veresterung_irc.log'
+        #inFileName_part_one = input('please enter file name of gaussian file:\n')
 
     VERBOSE = False
     DIRECTION = 1  # 1 OR -1
@@ -219,16 +241,18 @@ if __name__ == '__main__':
 
     ### quick an dirty
     i = 0
-
+    outFileList = []
     for reactionsCoord in rcs:
         reactionsInt = str(i)
         while len(reactionsInt) < 4:
             reactionsInt = '0' + reactionsInt
         i += 1
+        outFileName = baseFileName + '/' + str(reactionsInt) + '.'
         if xyzOUTPUT:
-            outFileName = baseFileName + '/' + reactionsInt + '.xyz'
+            outFileName += 'xyz'
         else:
-            outFileName = baseFileName + '/' + reactionsInt + '.com'
+            outFileName += 'com'
+        outFileList.append(outFileName)
         outFile = open(outFileName, 'w')
         if not xyzOUTPUT:
             outFile.write(content1)
@@ -244,3 +268,30 @@ if __name__ == '__main__':
         listOfFiles.sort(key=sortFunction)
         for i in range(len(listOfFiles)):
             os.rename(baseFileName + '/' + listOfFiles[i], baseFileName + '/irc-' + str(i) + '.com')
+
+    if PSI4LOAD and xyzOUTPUT and CALCWF:
+        # set psi4 stuff
+        psi4.set_memory('500 MB')
+        psi4.set_options({'PARALLEL': True,
+                          'reference': 'rhf'})
+        geometries = {}
+        energies = {}
+        wavefunctions = {}
+
+        for file in outFileList:
+            if file.split('.')[-1] != 'xyz':
+                print('remove ' + file + ' from list, because it is no xyz file')
+                outFileList.remove(file)
+            else:
+                with open(file) as f:
+                    geometries[file] = psi4.geometry(f.read())
+                print('calc wfn for ' + file)
+                energies[file], wavefunctions[file] = psi4.energy('mp2/cc-pvdz',
+                                                                  molecule=geometries[file],
+                                                                  return_wfn=True)
+                outFileName = file.split('.')[0] + '.molden'
+                print('save molden file: ' + outFileName)
+                psi4.molden(wavefunctions[file], outFileName)
+
+
+
