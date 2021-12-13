@@ -22,7 +22,6 @@ for dat in data:
     xData.append(dat[1])
 
 
-
 x = xData
 y = yData
 
@@ -36,15 +35,18 @@ plt.yticks(fontsize=15)
 ax.set_xlabel('Reaktionskoordinate', fontsize=15)
 ax.set_ylabel('Energie', fontsize=15)
 
-#line, = ax.plot(x, y, color='r', linewidth=3)
+# line, = ax.plot(x, y, color='r', linewidth=3)
 
 point, = ax.plot([], [], marker='+', markersize=7000, markeredgewidth=2, color='r', linewidth=10)
 
-plt.plot(x, y, linestyle='-', color='b', linewidth=2) # linestyle: '-', '--', '-.', ':', 'None', ' ', '', 'solid', 'dashed', 'dashdot', 'dotted'
+plt.plot(x, y, linestyle='-', color='b', linewidth=2)  # linestyle: '-', '--', '-.', ':', 'None', ' ', '', 'solid', 'dashed', 'dashdot', 'dotted'
+
+
 def update(num, x, y, line):
     line.set_data(x[:num], y[:num])
     line.axes.axis([min(xData)*1.1, max(xData)*1.1, min(yData)*1.1, max(yData) - min(yData)*.1])
     return line,
+
 
 def updateDot(num, x, y, line):
     point.set_data(x[num], y[num])
