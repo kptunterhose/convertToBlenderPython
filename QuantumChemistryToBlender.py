@@ -4,33 +4,71 @@ import os
 import sys
 import getopt
 import numpy as np
-#from scipy.optimize import minimize
-#import matplotlib
 import json
 import queue as q
-#from matplotlib import pyplot as plt
-#from matplotlib import animation
-#from qrcode.main import QRCode
-
-try:
-    import psi4
-    PSI4LOAD = True
-    CALCWF = False
-except ModuleNotFoundError:
-    print('''
-    Could not load/find PSI 4, so i can't do any quantum chemistry jobs.
-    If you already installd psi 4, you have to load it:
-    > conda activate p4dev
-    And rerun this script again. If you don't need PSI 4 everything 
-    is fine.
-    ''')
-    PSI4LOAD = False
-
-#matplotlib.use('TkAgg')
 
 VERBOSE = False
 IRC_ONEFILE = True
 IRC_DIRECTION = 1  # 1 or -1
+
+def importStuff():
+    try:
+        from qrcode.main import QRCode
+        from scipy.optimize import minimize
+        import matplotlib
+        from matplotlib import pyplot as plt
+        from matplotlib import animation
+        matplotlib.use('TkAgg')
+        MATPLOTLIPLOAD = True
+        SCIPYLOAD = True
+        QRCODELOAD = True
+    except ModuleNotFoundError:
+        MATPLOTLIPLOAD = False
+        SCIPYLOAD = False
+        QRCODELOAD = False
+        if VERBOSE:
+            print('''
+            In dieser Umgebung können die folgende Module (oder nur eins davon)
+            nicht geladen werden:
+            > scipy
+            > matplotlib
+            > qrcode
+            dieso Module sind nicht in p4dev drin (warum auch immer) kurze lösung:
+            > conda activate base
+            und starte das Skript erneut. Für PSI4 Sachen muss p4dev geladen werden
+            
+            Mit:
+            > conda info --envs
+            können die Umgebungen aufgelistet werden 
+            base -> scipy, matplotlib, qrcode
+            p4dev -> psi4 
+            ''')
+
+    try:
+        import psi4
+        PSI4LOAD = True
+        CALCWF = False
+    except ModuleNotFoundError:
+        PSI4LOAD = False
+        if VERBOSE:
+            print('''
+            Could not load/find PSI 4, so i can't do any quantum chemistry jobs.
+            If you already installd psi 4, you have to load it:
+            > conda activate p4dev
+            And rerun this script again. If you don't need PSI 4 everything 
+            is fine.
+            Wenn du IRC Pfade mit mehr als 1 .log Datei in Blender Skripte
+            umwandeln willst muss wieder das base Modul geladen werden:
+            > conda activate base
+            
+            
+            Mit:
+            > conda info --envs
+            können die Umgebungen aufgelistet werden 
+            base -> scipy, matplotlib, qrcode
+            p4dev -> psi4
+            ''')
+
 
 
 symbolToName = {
@@ -108,11 +146,15 @@ def printHelp():
     
     Beispiele:
     QuantumChemistryToBlender.py -c h2o.com 
+    QuantumChemistryToBlender.py -i Reaktion_irc.log
+    QuantumChemistryToBlender.py -d -1 -i Irc_teil-1.log Irc_teil-2.log
     QuantumChemistryToBlender.py -o 9,11-13 # TODO überprüfen
+    
     
     -h  -H  zeigt diese Hilfe an
     -c      wandelt .com Datei (Gaussian Job File) in ein Python Skript für Blender um
     -i      wandelt .log Datei einer IRC Pfad Rechnung in ein Python Skript für Blender um
+    -d      option bei -i mit zwei .log Dateien, gibt die Richtung der Reaktion aus der zweiten .log Datei an: 1 für vorwärts, -1 für rückwärts
     -m      wandelt .log Datei einer IRC Pfad Rechnung in Molpro Job Files (.com) um
     -x      wandelt .log Datei einer IRC Pfad Rechnung in xyz Geometrie Dateien für PSI4 Rechnungen um
     -w      erstellt aus .log Datei einer IRC Pfad Rechnung Wellenfunktionen, die in einer Molden Datei gespeichert werden. Diese können mit IboView geöffent und bearbeitet werden.
@@ -1542,180 +1584,270 @@ if __name__ == '__main__':
 '''
 
 
-def convertComToString(inFile, moveToCenter=True):
-    line = inFile.readline()
-    while line[0] == '%':
-        line = inFile.readline()
-    while line[0] == '#':
-        line = inFile.readline()
-        line = inFile.readline()
-        line = inFile.readline()
-        line = inFile.readline()
-    lines = inFile.readlines()
-    inFile.close()
-    if moveToCenter:
-        offSet = calcCenterOfAtoms(lines)
-        lines = moveAllAtoms(lines, offSet)
-    return lines
+class ComFile(object):
+
+    def __init__(self, fileName):
+        self.optionsLines = list()
+        self.jobLine = str()
+        self.nameLine = str()
+        self.multiLine = str()
+        self.geometryLines = list()
+        self.offSet = list()
+        if not fileName:
+            fileName = input('please enter file name of gaussian file:\n')
+        self.fileName = fileName
+        self.outFileName = fileName.split('.')[0] + '_blender.py'
+
+    def readComFile(self):
+        countLinesAfterJob = 0
+        for i in range(len(self.rawLines)):
+            if self.rawLines[i][0] == '%':
+                self.optionsLines.append(self.rawLines[i])
+            elif self.rawLines[i][0] == '#':
+                self.jobLine = self.rawLines[i]
+            else:
+                countLinesAfterJob += 1
+                if countLinesAfterJob == 2:
+                    self.nameLine = self.rawLines[i]
+                elif countLinesAfterJob == 4:
+                    self.multiLine = self.rawLines[i]
+                elif countLinesAfterJob > 4:
+                    self.geometryLines.append(self.rawLines[i])
+
+    def moveToCenter(self):
+        self.calcCenterOfAtoms()
+        self.moveAllAtoms()
+
+    def calcCenterOfAtoms(self):
+        sum = [0, 0, 0]
+        for line in self.geometryLines:
+            line = line.split()
+            if line:
+                sum[0] += float(line[1])
+                sum[1] += float(line[2])
+                sum[2] += float(line[3])
+        for i in range(len(sum)):
+            sum[i] = sum[i] / len(lines)
+        self.offSet = sum
+
+    def moveAllAtoms(self):
+        newLines = []
+        for i in range(len(self.geometryLines)):
+            line = ''
+            words = self.geometryLines[i].split()
+            if words:
+                line += words[0] + ' '
+                line += str(float(words[1]) - offset[0]) + ' '
+                line += str(float(words[2]) - offset[1]) + ' '
+                line += str(float(words[3]) - offset[2]) + '\n'
+                newLines.append(line)
+        self.geometryLines = newLines
+
+    def getListOfFiles(self, fileType='com'):
+        fileNames = []
+        temp = os.listdir()
+        for i in range(len(temp)):
+            name = temp[i].split('.')
+            if name[-1] == fileType:
+                fileNames.append(temp[i])
+        self.listOfFiles = fileNames
+
+    def makePythonOutfile(self):
+        with open(self.fileName, 'r') as inFile:
+            self.rawLines = inFile.readlines()
+        self.readComFile()
+        with open(self.outFileName, 'w') as outFile:
+            outFile.write(BLENDER_CONTENT_HEADER)
+            for line in self.geometryLines:
+                outFile.write(line)
+            outFile.write(BLENDER_CONTENT_COM)
+        print('Speichere Blender Pyhton Skript in: '+ self.outFileName)
 
 
-def calcCenterOfAtoms(lines):
-    sum = [0, 0, 0]
-    for line in lines:
-        line = line.split()
-        if line:
-            sum[0] += float(line[1])
-            sum[1] += float(line[2])
-            sum[2] += float(line[3])
-    for i in range(len(sum)):
-        sum[i] = sum[i] / len(lines)
-    return sum
+class IrcFile(object):
 
+    def __init__(self, listOfFiles):
+        self.coords4RC = dict()
+        self.reactionCoordinates = list()
+        self.startConfig = list()  # müsste list sein
+        self.linesGeometry = list()
+        if len(listOfFiles) == 1:
+            inFileNamePartOne = listOfFiles[0]
+            inFileNamePartTwo = str()
+        elif len(listOfFiles) == 2:
+            IRC_ONEFILE = False
+            inFileNamePartOne = listOfFiles[0]
+            inFileNamePartTwo = listOfFiles[1]
+        else:
+            inFileNamePartOne = input('Bitte geben den Pfad der .log Datei der irc Pfad Rechnung an:\n')
+        self.inFileNamePartOne = inFileNamePartOne
+        self.inFileNamePartTwo = inFileNamePartTwo
+        self.outFileName = inFileNamePartOne.split('.')[0] + '_blender.py'
+        self.readIrcLog()
 
-def moveAllAtoms(lines, offset):
-    newLines = []
-    for i in range(len(lines)):
-        line = ''
-        words = lines[i].split()
-        if words:
-            line += words[0] + ' '
-            line += str(float(words[1]) - offset[0]) + ' '
-            line += str(float(words[2]) - offset[1]) + ' '
-            line += str(float(words[3]) - offset[2]) + '\n'
-            newLines.append(line)
-    return newLines
+    def readIrcLog(self):
+        with open(self.inFileNamePartOne, 'r') as inFile:
+            self.allLines = inFile.readlines()
+        self.getStartGeometry()
 
+    def getStartLines(self):
+        startPoints = []
+        inputOrientation = []
+        inputOrientation4Point = {}
+        for i in range(len(self.allLines)):
+            if 'Point Number' in self.allLines[i]:
+                startPoints.append(i)
+            elif 'Input orientation:' in self.allLines[i]:
+                inputOrientation.append(i)
+        for p in startPoints:
+            maxinputPoint = 0
+            for inputO in inputOrientation:
+                if (inputO < p and inputO > maxinputPoint):
+                    maxinputPoint = inputO
+            inputOrientation4Point[p] = maxinputPoint
+        return startPoints, inputOrientation4Point
 
-def getListOfFiles(fileType='.com'):
-    fileNames = []
-    temp = os.listdir()
-    for i in range(len(temp)):
-        name = temp[i].split('.')
-        if name[-1] == fileType:
-            fileNames.append(temp[i])
-    return fileNames
+    def getStartGeometry(self):
+        startP, dict4input = self.getStartLines()
 
+        for point in dict4input:
+            pointNR, pathNr, reactionCoordinate = self.getInfos(point)
+            self.coords4RC[reactionCoordinate] = self.getKoords(dict4input[point])
+            self.reactionCoordinates.append(reactionCoordinate)
+        self.reactionCoordinates.sort()
+        self.startConfig = self.coords4RC[self.reactionCoordinates[0]]
 
-def makePythonOutfileFromCom(inFileName):
-    inFile = open(inFileName, 'r')
-    lines = convertComToString(inFile, True)
-    inFile.close()
-    outFileName = inFileName.split('.')[0] + '_blender.py'
-    outFile = open(outFileName, 'w')
-    outFile.write(BLENDER_CONTENT_HEADER)
-    for line in lines:
-        outFile.write(line)
-    outFile.write(BLENDER_CONTENT_COM)
-    outFile.close()
-    print('write output to ' + outFileName)
-    return 0
+    def getInfos(self, startLine):
+        words = self.allLines[startLine].split()
+        pointNR = int(words[2])
+        pathNR = int(words[5])
+        if pointNR == 0:
+            reactionCoordinate = 0
+        else:
+            reactionCoordinate = float(self.allLines[startLine + 2].split()[-1])
+        if pathNR == 1:
+            reactionCoordinate *= IRC_DIRECTION
+        elif pathNR == 2:
+            reactionCoordinate *= -IRC_DIRECTION
+        return pointNR, pathNR, reactionCoordinate
 
+    def getKoords(self, startLine):
+        if VERBOSE:
+            print('reading koords with startline: ' + str(startLine))
+        koords = dict()
+        lineNumber = startLine + 5
+        while '---' not in self.allLines[lineNumber]:
+            words = self.allLines[lineNumber].split()
+            centerNumber = int(words[0])
+            atomicNumber = int(words[1])
+            x = float(words[3])
+            y = float(words[4])
+            z = float(words[5])
+            koords[centerNumber] = [atomicNumber, [x, y, z]]
+            lineNumber += 1
+        return koords
 
-def comToBlender(listOfFiles):
-    if not listOfFiles:
-        listOfFiles.append(input('please enter file name of gaussian file:\n'))
-    print(listOfFiles)
-    for fileName in listOfFiles:
-        makePythonOutfileFromCom(fileName)
+    def makeStartGeometryLines(self):
+        for i in self.startConfig:
+            lineGeo = numberToSymbol[self.startConfig[i][0]]
+            lineGeo += '   '
+            lineGeo += str(self.startConfig[i][1][0]) + '  '
+            lineGeo += str(self.startConfig[i][1][1]) + '  '
+            lineGeo += str(self.startConfig[i][1][2]) + '\n'
+            self.linesGeometry.append(lineGeo)
 
-
-def getStartLines(lines):
-    startPoints = []
-    inputOrientation = []
-    inputOrientation4Point = {}
-    for i in range(len(lines)):
-        if 'Point Number' in lines[i]:
-            startPoints.append(i)
-        elif 'Input orientation:' in lines[i]:
-            inputOrientation.append(i)
-    for p in startPoints:
-        maxinputPoint = 0
-        for inputO in inputOrientation:
-            if (inputO < p and inputO > maxinputPoint):
-                maxinputPoint = inputO
-        inputOrientation4Point[p] = maxinputPoint
-    return startPoints, inputOrientation4Point
-
-
-def getStartGeometry(allLines):
-    coords4RC = dict()
-    startP, dict4input = getStartLines(allLines)
-
-    for point in dict4input:
-        pointNR, pathNr, reactionCoordinate = getInfos(point, allLines)
-        coords4RC[reactionCoordinate] = getKoords(dict4input[point], allLines)
-
-    reactionCoordinates = []
-    for p in coords4RC:
-        reactionCoordinates.append(p)
-    reactionCoordinates.sort()
-
-    startConfig = coords4RC[reactionCoordinates[0]]
-    return startConfig, reactionCoordinates, coords4RC
-
-
-def getInfos(startLine, allLines):
-    words = allLines[startLine].split()
-    pointNR = int(words[2])
-    pathNR = int(words[5])
-    if pointNR == 0:
-        reactionCoordinate = 0
-    else:
-        reactionCoordinate = float(allLines[startLine + 2].split()[-1])
-    if pathNR == 1:
-        reactionCoordinate *= IRC_DIRECTION
-    elif pathNR == 2:
-        reactionCoordinate *= -IRC_DIRECTION
-    return pointNR, pathNR, reactionCoordinate
-
-
-def getKoords(startLine, allLines):
-    if VERBOSE:
-        print('reading koords with startline: ' + str(startLine))
-    koords = {}
-    lineNumber = startLine + 5
-    while '---' not in allLines[lineNumber]:
-        words = allLines[lineNumber].split()
-        centerNumber = int(words[0])
-        atomicNumber = int(words[1])
-        x = float(words[3])
-        y = float(words[4])
-        z = float(words[5])
-        koords[centerNumber] = [atomicNumber, [x, y, z]]
-        lineNumber += 1
-    return koords
-
-
-def getStartGeometryLines(startConfig):
-    linesGeometry = []
-    for i in startConfig:
-        lineGeo = numberToSymbol[startConfig[i][0]]
-        lineGeo += '   '
-        lineGeo += str(startConfig[i][1][0]) + '  '
-        lineGeo += str(startConfig[i][1][1]) + '  '
-        lineGeo += str(startConfig[i][1][2]) + '\n'
-        linesGeometry.append(lineGeo)
-    return linesGeometry
-
-
-def getReaktionsPfadLines(reactionsCoords, coords4ReactionsPath):
-    linesOutput = []
-    for j in reactionsCoords:
-        lineTemp = 'reactions Coordinate: '
-        lineTemp += str(j)
-        lineTemp += ' Energie: \n'
-        linesOutput.append(lineTemp)
-        for centerNumber in coords4ReactionsPath[j]:
-            lineTemp = str(centerNumber)
-            lineTemp += ' '
-            lineTemp += str(coords4ReactionsPath[j][centerNumber][1][0])
-            lineTemp += ' '
-            lineTemp += str(coords4ReactionsPath[j][centerNumber][1][1])
-            lineTemp += ' '
-            lineTemp += str(coords4ReactionsPath[j][centerNumber][1][2])
-            lineTemp += '\n'
+    def getReaktionsPfadLines(self):
+        linesOutput = []
+        for j in self.reactionCoordinates:
+            lineTemp = 'reactions Coordinate: '
+            lineTemp += str(j)
+            lineTemp += ' Energie: \n'
             linesOutput.append(lineTemp)
-    return linesOutput
+            for centerNumber in self.coords4RC[j]:
+                lineTemp = str(centerNumber)
+                lineTemp += ' '
+                lineTemp += str(self.coords4RC[j][centerNumber][1][0])
+                lineTemp += ' '
+                lineTemp += str(self.coords4RC[j][centerNumber][1][1])
+                lineTemp += ' '
+                lineTemp += str(self.coords4RC[j][centerNumber][1][2])
+                lineTemp += '\n'
+                linesOutput.append(lineTemp)
+        return linesOutput
+
+    def makePythonOutfile(self):
+        with open(self.outFileName, 'w') as outFile:
+            outFile.write(BLENDER_CONTENT_HEADER)
+            self.makeStartGeometryLines()
+            for line in self.linesGeometry:
+                outFile.write(line)
+            outFile.write(BLENDER_CONTENT_PATHDATA)
+            for line in self.getReaktionsPfadLines():
+                outFile.write(line)
+            if not IRC_ONEFILE:
+                if SCIPYLOAD:
+                    if VERBOSE:
+                        print('starte mit zweiter Datei')
+
+                    compareGeometry = self.coords4RC[0]
+                    oldReactionsCoordinate = 0
+                    for reaktionsKoordinate in self.coords4RC:
+                        if reaktionsKoordinate > oldReactionsCoordinate:
+                            oldReactionsCoordinate = reaktionsKoordinate
+                            compareGeometryPartTwo = self.coords4RC[reaktionsKoordinate]
+                    reaktionsKoordinatenShift += abs(reaktionsKoordinate)
+
+                    with open(inFileNamePartTwo, 'r') as inFile:
+                        self.allLines = inFile.readlines()
+                    getStartGeometry()
+                    compareGeometryPartTwo = self.coords4RC[0]
+                    oldReactionsCoordinate = 0
+                    for reaktionsKoordinate in self.coords4RC:
+                        if reaktionsKoordinate < oldReactionsCoordinate:
+                            oldReactionsCoordinate = reaktionsKoordinate
+                            compareGeometryPartTwo = coords4RCTwo[reaktionsKoordinate]
+                    reaktionsKoordinatenShift += abs(reaktionsKoordinate)
+
+                    # calc rot und move matrices --> min distance of coords of fist 6 atoms
+
+                    startPoints = list()
+                    targetPoints = list()
+                    for i in range(1, 7):
+                        startPoints.append(compareGeometryPartTwo[i][1])
+                        targetPoints.append(compareGeometry[i][1])
+                    rotTrans = RotTrans2Congruent(startPoints=startPoints,
+                                                  targetPoints=targetPoints)
+                    rot, trans = rotTrans.calc_rot_trans()
+
+                    # make rot und trans
+                    # xyz = rotTrans.matrix_mal_vector(rot, xyz)
+                    # xyz = rotTrans.translations(trans, xyz)
+                    # print(xyz)
+
+                    for line in self.getReaktionsPfadLines():
+                        try:
+                            # print(len(line.split()))
+                            n = int(line.split()[0])
+                            x = float(line.split()[1])
+                            y = float(line.split()[2])
+                            z = float(line.split()[3])
+                            vector = [x, y, z]
+                            vector = rotTrans.matrix_mal_vektor(rot, vector)
+                            vector = rotTrans.translation(trans, vector)
+                            line = str(n) + ' ' + str(vector[0]) + ' ' + str(vector[1]) + ' ' + str(vector[2]) + '\n'
+                            outFile.write(line)
+                        except ValueError:
+                            shift = float(line.split()[2]) + reactions_coordinate_shift
+                            line = 'reactions Coordinate: '
+                            line += str(shift)
+                            line += ' Energie: \n'
+                            # 'change the reactionscoordinate '
+                            outFile.write(line)
+                else:
+                    print(
+                        'konnte scipy nicht laden, nutze base Umgebung (conda activate base), und somit auch nicht die Molekülgeometrien vergleichen')
+            outFile.write(BLENDER_CONTENT_IRC)
+            print('Speicher Output unter: ' + self.outFileName)
 
 
 class RotTrans2Congruent(object):
@@ -1882,109 +2014,37 @@ class RotTrans2Congruent(object):
         return self.rot_matrix, final_translation
 
 
-def ircToBlender(inputFiles):
-    global IRC_ONEFILE
-    if len(inputFiles) == 1:
-        inFileNamePartOne = inputFiles[0]
-    elif len(inputFiles) == 2:
-        IRC_ONEFILE = False
-        inFileNamePartOne = inputFiles[0]
-        inFileNamePartTwo = inputFiles[1]
-    else:
-        inFileNamePartOne = input('Bitte geben den Pfad der .log Datei der irc Pfad Rechnung an:\n')
-
-    outFileName = inFileNamePartOne.split('.')[0] + '_blender.py'
-    with open(inFileNamePartOne, 'r') as inFile:
-        allLines = inFile.readlines()
-
-    startConfig, reaktionsKoordinaten, coords4RC = getStartGeometry(allLines=allLines)
-
-    with open(outFileName, 'w') as outFile:
-        outFile.write(BLENDER_CONTENT_HEADER)
-        for line in getStartGeometryLines(startConfig=startConfig):
-            outFile.write(line)
-        outFile.write(BLENDER_CONTENT_PATHDATA)
-        for line in getReaktionsPfadLines(reactionsCoords=reaktionsKoordinaten,
-                                          coords4ReactionsPath=coords4RC):
-            outFile.write(line)
-        if not IRC_ONEFILE:
-            if VERBOSE:
-                print('starte mit zweiter Datei')
-
-            compareGeometry = coords4RC[0]
-            oldReactionsCoordinate = 0
-            for reaktionsKoordinate in coords4RC:
-                if reaktionsKoordinate > oldReactionsCoordinate:
-                    oldReactionsCoordinate = reaktionsKoordinate
-                    compareGeometryPartTwo = coords4RC[reaktionsKoordinate]
-            reaktionsKoordinatenShift += abs(reaktionsKoordinate)
-
-            with open(inFileNamePartTwo, 'r') as inFile:
-                allLines = inFile.readlines()
-            startConfigTwo, reaktionsKoordinatenTwo, coords4RCTwo = getStartGeometry(allLines=allLines)
-            compareGeometryPartTwo = coords4RCTwo[0]
-            oldReactionsCoordinate = 0
-            for reaktionsKoordinate in coords4RCTwo:
-                if reaktionsKoordinate < oldReactionsCoordinate:
-                    oldReactionsCoordinate = reaktionsKoordinate
-                    compareGeometryPartTwo = coords4RCTwo[reaktionsKoordinate]
-            reaktionsKoordinatenShift += abs(reaktionsKoordinate)
-
-            #calc rot und move matrices --> min distance of coords of fist 6 atoms
-
-            startPoints = list()
-            targetPoints = list()
-            for i in range(1, 7):
-                startPoints.append(compareGeometryPartTwo[i][1])
-                targetPoints.append(compareGeometry[i][1])
-            rotTrans = RotTrans2Congruent(startPoints=startPoints,
-                                          targetPoints=targetPoints)
-            rot, trans = rotTrans.calc_rot_trans()
-
-            # make rot und trans
-            # xyz = rotTrans.matrix_mal_vector(rot, xyz)
-            # xyz = rotTrans.translations(trans, xyz)
-            # print(xyz)
-
-            for line in getReaktionsPfadLines(reaktionsKoordinatenTwo, coords4RCTwo):
-                try:
-                    # print(len(line.split()))
-                    n = int(line.split()[0])
-                    x = float(line.split()[1])
-                    y = float(line.split()[2])
-                    z = float(line.split()[3])
-                    vector = [x, y, z]
-                    vector = test.matrix_mal_vektor(rot, vector)
-                    vector = test.translation(trans, vector)
-                    line = str(n) + ' ' + str(vector[0]) + ' ' + str(vector[1]) + ' ' + str(vector[2]) + '\n'
-                    outFile.write(line)
-                except ValueError:
-                    shift = float(line.split()[2]) + reactions_coordinate_shift
-                    line = 'reactions Coordinate: '
-                    line += str(shift)
-                    line += ' Energie: \n'
-                    # 'change the reactionscoordinate '
-                    outFile.write(line)
-        outFile.write(BLENDER_CONTENT_IRC)
-        print('speicher Output unter ' + outFileName)
-
-
 if __name__ == '__main__':
     todo = sys.argv
+    if len(todo) == 1:
+        printHelp()
     try:
-        opts, inputFiles = getopt.getopt(sys.argv[1:], 'hcvimxwao:', [])
+        opts, inputFiles = getopt.getopt(sys.argv[1:], 'hvcid:mxwao:', [])
     except getopt.GetoptError:
         printHelp()
         sys.exit(2)
+    # checking nach globalen optionen
     for opt, arg in opts:
         if opt == '-h':
             printHelp()
         elif opt == '-v':
             VERBOSE = True
-        elif opt == '-c':
-            comToBlender(inputFiles)
+        elif opt == '-d':
+            if arg == '1':
+                IRC_DIRECTION = 1
+            else:
+                IRC_DIRECTION = -1
+
+    # checking nach jop type
+    for opt, arg in opts:
+        if opt == '-c':
+            for inputFile in inputFiles:
+                molekule = ComFile(inputFile)
+                molekule.makePythonOutfile()
         elif opt == '-i':
-            ircToBlender(inputFiles)
+            importStuff()
+            irc = IrcFile(inputFiles)
+            irc.makePythonOutfile()
 
 
 
