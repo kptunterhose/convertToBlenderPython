@@ -4,9 +4,9 @@
   + irc to ...
     + Graph
     +[x] Blender
-    + Molpro
-    + PSI4
-    + Wellenfunktionen (molden)
+    +[x] Molpro
+    +[x] PSI4
+    +[x] Wellenfunktionen (molden)
 + merge all blender scripts to one
   + to blender 
     +[x] from irc

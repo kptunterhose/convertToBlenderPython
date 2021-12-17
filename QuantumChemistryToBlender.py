@@ -10,8 +10,19 @@ import queue as q
 VERBOSE = False
 IRC_ONEFILE = True
 IRC_DIRECTION = 1  # 1 or -1
+SORTandRENAME = False
+MOLPRO = 'MOLPRO'
+MOLDEN = 'MOLDEN'
+XYZ = 'XYZ'
+FILE_TYPES = {
+    MOLPRO: 'com',
+    MOLDEN: 'molden',
+    XYZ: 'xyz'
+}
+import psi4
 
 def importStuff():
+    global PSI4LOAD
     try:
         from qrcode.main import QRCode
         from scipy.optimize import minimize
@@ -47,8 +58,7 @@ def importStuff():
     try:
         import psi4
         PSI4LOAD = True
-        CALCWF = False
-    except ModuleNotFoundError:
+    except ModuleNotFoundError as e:
         PSI4LOAD = False
         if VERBOSE:
             print('''
@@ -1583,6 +1593,20 @@ if __name__ == '__main__':
         bond.makeAnimation()
 '''
 
+MOLPRO_HEADER = '''
+memory,200,m;
+
+geometry={
+'''
+MOLPRO_JOB_DETAILS = '''
+}
+
+basis=tzvpp
+{df-rks,pbe}
+{ibba,iboexp=2, bonds=1}
+{put,xml,%s.xml; keepspherical; nosort; skipvirt}
+'''
+
 
 class ComFile(object):
 
@@ -1661,7 +1685,7 @@ class ComFile(object):
             for line in self.geometryLines:
                 outFile.write(line)
             outFile.write(BLENDER_CONTENT_COM)
-        print('Speichere Blender Pyhton Skript in: '+ self.outFileName)
+        print('Speichere Blender Pyhton Skript unter: ' + self.outFileName)
 
 
 class IrcFile(object):
@@ -1671,6 +1695,7 @@ class IrcFile(object):
         self.reactionCoordinates = list()
         self.startConfig = list()  # müsste list sein
         self.linesGeometry = list()
+        self.outFileList = list()
         if len(listOfFiles) == 1:
             inFileNamePartOne = listOfFiles[0]
             inFileNamePartTwo = str()
@@ -1682,7 +1707,8 @@ class IrcFile(object):
             inFileNamePartOne = input('Bitte geben den Pfad der .log Datei der irc Pfad Rechnung an:\n')
         self.inFileNamePartOne = inFileNamePartOne
         self.inFileNamePartTwo = inFileNamePartTwo
-        self.outFileName = inFileNamePartOne.split('.')[0] + '_blender.py'
+        self.baseFileName = inFileNamePartOne.split('.')[0]
+        self.outFileName = self.baseFileName + '_blender.py'
         self.readIrcLog()
 
     def readIrcLog(self):
@@ -1757,7 +1783,7 @@ class IrcFile(object):
             self.linesGeometry.append(lineGeo)
 
     def getReaktionsPfadLines(self):
-        linesOutput = []
+        linesOutput = list()
         for j in self.reactionCoordinates:
             lineTemp = 'reactions Coordinate: '
             lineTemp += str(j)
@@ -1773,6 +1799,21 @@ class IrcFile(object):
                 lineTemp += str(self.coords4RC[j][centerNumber][1][2])
                 lineTemp += '\n'
                 linesOutput.append(lineTemp)
+        return linesOutput
+
+    def getReaktionsPfadLinesFurReaktionsKoordinate(self, reactionsKoordinate):
+        linesOutput = list()
+        for j in range(len(self.coords4RC[reactionsKoordinate])):
+            jj = j + 1
+            lineTemp = str(numberToSymbol[self.startConfig[jj][0]])
+            lineTemp += ' '
+            lineTemp += str(self.coords4RC[reactionsKoordinate][jj][1][0])
+            lineTemp += ' '
+            lineTemp += str(self.coords4RC[reactionsKoordinate][jj][1][1])
+            lineTemp += ' '
+            lineTemp += str(self.coords4RC[reactionsKoordinate][jj][1][2])
+            lineTemp += '\n'
+            linesOutput.append(lineTemp)
         return linesOutput
 
     def makePythonOutfile(self):
@@ -1847,7 +1888,76 @@ class IrcFile(object):
                     print(
                         'konnte scipy nicht laden, nutze base Umgebung (conda activate base), und somit auch nicht die Molekülgeometrien vergleichen')
             outFile.write(BLENDER_CONTENT_IRC)
-            print('Speicher Output unter: ' + self.outFileName)
+            print('Speichere Blender Skript unter: ' + self.outFileName)
+
+    def makeGeometryOutfiles(self, format=MOLPRO):
+        if os.path.exists(self.baseFileName):
+            print('Der Ordner (' + self.baseFileName + ') existiert.')
+            overrideInput = input('Wollen Sie den Inhalt überschreiben? [j]/n ')
+            if overrideInput.lower() in ('n', 'no', 'nein'):
+                print('Skript wird beendet.')
+                print('Hinweis: Die Dateien werden in dem Ordner mit dem Namen der .log Datei (ohne Endung) gespeichert')
+                exit(1)
+        else:
+            os.mkdir(self.baseFileName)
+            print('Erstelle Output-Ordner: ' + self.baseFileName)
+        i = 0
+
+        for reaktionsKoordinate in self.reactionCoordinates:
+            reactionsInt = str(i)
+            while len(reactionsInt) < 4:
+                reactionsInt = '0' + reactionsInt
+            i += 1
+            outFileName = self.baseFileName + '/' + str(reactionsInt) + '.' + FILE_TYPES[format]
+            self.outFileList.append(outFileName)
+            with open(outFileName, 'w') as outFile:
+                if format == MOLPRO:
+                    outFile.write(MOLPRO_HEADER)
+                for line in self.getReaktionsPfadLinesFurReaktionsKoordinate(reaktionsKoordinate):
+                    outFile.write(line)
+                if format == MOLPRO:
+                    outFile.write(MOLPRO_JOB_DETAILS % reactionsInt)
+            print('Speichere Output-Datei unter: ' + outFileName)
+
+        if SORTandRENAME:
+            listOfFiles = os.listdir(self.baseFileName)
+            listOfFiles.sort(key=self.sortFunction)
+            for i in range(len(listOfFiles)):
+                os.rename(self.baseFileName + '/' + listOfFiles[i],
+                          self.baseFileName + '/irc-' + str(i) + '.' + FILE_TYPES[format])
+
+    def makeWavefunctionMoldenOutfiles(self):
+        global PSI4LOAD
+        if PSI4LOAD:
+            psi4.set_memory('500 MB')
+            psi4.set_options({'PARALLEL': True,
+                              'reference': 'rhf'})
+            geometries = dict()
+            energies = dict()
+            wavefunctions = dict()
+            for file in self.outFileList:
+                print(file.split('.')[-1])
+                print(XYZ)
+                if file.split('.')[-1] != FILE_TYPES[XYZ]:
+                    print('Entferne ' + file + ' von der Liste, da es keine xyz Datei ist.')
+                    self.outFileList.remove(file)
+                else:
+                    with open(file) as f:
+                        geometries[file] = psi4.geometry(f.read())
+                    print('Berechne Wellenfunktion für ' + file)
+                    energies[file], wavefunctions[file] = psi4.energy('mp2/cc-pvdz',
+                                                                      molecule=geometries[file],
+                                                                      return_wfn=True)
+                    outFileName = file.split('.')[0] + '.' + FILE_TYPES[MOLDEN]
+                    print('Speichere Molden Datei unter: ' + outFileName)
+                    psi4.molden(wavefunctions[file], outFileName)
+        else:
+            print('kann PSI4 nicht laden')
+            print('Versuche Skript mit:')
+            print('> python QuantumChemistryToBlender.py -w irc.log')
+
+    def sortFunction(self, value):
+        return float(value[:-4])
 
 
 class RotTrans2Congruent(object):
@@ -2041,10 +2151,18 @@ if __name__ == '__main__':
             for inputFile in inputFiles:
                 molekule = ComFile(inputFile)
                 molekule.makePythonOutfile()
-        elif opt == '-i':
+        elif opt in ('-i', '-m', '-x', '-w'):
             importStuff()
             irc = IrcFile(inputFiles)
-            irc.makePythonOutfile()
+            if opt == '-i':
+                irc.makePythonOutfile()
+            elif opt == '-m':
+                irc.makeGeometryOutfiles(format=MOLPRO)
+            elif opt == '-x':
+                irc.makeGeometryOutfiles(format=XYZ)
+            elif opt == '-w':
+                irc.makeGeometryOutfiles(format=XYZ)
+                irc.makeWavefunctionMoldenOutfiles()
 
 
 
