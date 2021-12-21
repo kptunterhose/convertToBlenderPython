@@ -22,7 +22,7 @@ CollectionName = 'Orbital'
 
 dOrbs = '''
 
-content2 = """
+content2 = '''
 material_pos = bpy.data.materials.new(name='material-pos')
 material_pos.diffuse_color = (1,0,0,.25)
 material_neg = bpy.data.materials.new(name='material-neg')
@@ -54,7 +54,7 @@ for orbital in dOrbs:
         dOrbs[orbital][sign]['obj'].data.materials.append(material[sign.split('-')[0]])
         dOrbs[orbital][sign]['obj'].scale = [.5, .5, .5]
         singleOrbital.objects.link(dOrbs[orbital][sign]['obj'])
-"""
+'''
 
 
 def readOrbitalFromFiles(listOfOrbitalNames, onlySomeOrbitals = []):

@@ -734,8 +734,6 @@ def getMaxData(inFile, nMax=1):
     return maxData
 
 
-
-
 def calcCenterOfAtoms(lines):
     sum = [0, 0, 0]
     for line in lines:
@@ -747,6 +745,7 @@ def calcCenterOfAtoms(lines):
     for i in range(len(sum)):
         sum[i] = sum[i] / len(lines)
     return sum
+
 
 def moveAllAtoms(lines, offset):
     newLines = []
@@ -761,6 +760,7 @@ def moveAllAtoms(lines, offset):
             newLines.append(line)
     return newLines
 
+
 def getListOfFiles():
     fileNames = []
     temp = os.listdir()
@@ -769,6 +769,7 @@ def getListOfFiles():
         if name[-1] == 'ref':
             fileNames.append(temp[i])
     return fileNames
+
 
 def makePythonOutfile(inFileName):
     inFile = open(inFileName, 'r')
