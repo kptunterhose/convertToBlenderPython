@@ -6,6 +6,7 @@ import getopt
 import numpy as np
 import json
 import queue as q
+
 PSI4LOAD = False
 MATPLOTLIPLOAD = False
 SCIPYLOAD = False
@@ -13,6 +14,7 @@ QRCODELOAD = False
 VERBOSE = False
 IRC_ONEFILE = True
 IRC_DIRECTION = 1  # 1 or -1
+REAKTIONSSHIFT = 0
 SORTandRENAME = False
 CSV = 'CSV'
 LOG = 'LOG'
@@ -74,8 +76,8 @@ def importStuff():
             Wenn du IRC Pfade mit mehr als 1 .log Datei in Blender Skripte
             umwandeln willst muss wieder das base Modul geladen werden:
             > conda activate base
-            
-            
+
+
             Mit:
             > conda info --envs
             können die Umgebungen aufgelistet werden 
@@ -159,19 +161,20 @@ def printHelp():
     Bei PSI4 jobs ist es notwendig python vorne weg zu schreiben, da es ansonsten /usr/bin/python3 nutzt
     und nicht die der conda Umgebung (conda info --envs) 
     Python Pfad: witch python
-    
+
     Beispiele:
     QuantumChemistryToBlender.py -c h2o.com 
     QuantumChemistryToBlender.py -i Reaktion_irc.log
-    QuantumChemistryToBlender.py -d -1 -i Irc_teil-1.log Irc_teil-2.log
+    QuantumChemistryToBlender.py -d -1 -s 10 -i Irc_teil-1.log Irc_teil-2.log
     QuantumChemistryToBlender.py -o 9,11-13 # TODO überprüfen
-    
-    
+
+
     -h        --help            zeigt diese Hilfe an
     -v        --verbose         Zeigt mehr Output im Terminal an
     -c        --com             wandelt .com Datei (Gaussian Job File) in ein Python Skript für Blender um
     -i        --irc             wandelt .log Datei einer IRC Pfad Rechnung in ein Python Skript für Blender um
     -d [1/-1] --direction       Option bei -i mit zwei .log Dateien, gibt die Richtung der Reaktion aus der zweiten .log Datei an: 1 für vorwärts, -1 für rückwärts
+    -s [n]    --shift           Option bei -i mit zwei .log Dateien: vergrößert den shift (frames) zwischen den Geometrien (besser für die visualisierung in Blender)
     -g        --graph           Erstellt einen animierten Graph: Energie vs. Reaktionskoordinate 
     -m        --molpro          wandelt .log Datei einer IRC Pfad Rechnung in Molpro Job Files (.com) um
     -x        --xyz             wandelt .log Datei einer IRC Pfad Rechnung in xyz Geometrie Dateien für PSI4 Rechnungen um
@@ -2306,7 +2309,7 @@ basis=tzvpp
 
 
 def makeIRCGraph(fileName):
-    #fileName: csv mit # Energie Reaktionskoordinate als spalten
+    # fileName: csv mit # Energie Reaktionskoordinate als spalten
     if MATPLOTLIPLOAD:
         outFileName = fileName.split('.')[0]
         extension = fileName.split('.')[-1]
@@ -2375,7 +2378,8 @@ def makeIRCGraph(fileName):
                  dpi=300,
                  fps=24,
                  savefig_kwargs={'transparent': True})
-        os.system('ffmpeg -i {mp4} -c:v libvpx -pix_fmt yuva420p -auto-alt-ref 0 -b:v 4M -y {webm}'.format(mp4=outFileName+'.'+FILE_TYPES[MP4], webm=outFileName+'.'+FILE_TYPES[WEBM]))
+        os.system('ffmpeg -i {mp4} -c:v libvpx -pix_fmt yuva420p -auto-alt-ref 0 -b:v 4M -y {webm}'.format(
+            mp4=outFileName + '.' + FILE_TYPES[MP4], webm=outFileName + '.' + FILE_TYPES[WEBM]))
         plt.show()
     pass
 
@@ -2421,7 +2425,7 @@ class MaxFile(object):
         data = openFile.readline()
         maxData = dict()
         for i in range(nMax):
-            maxData[i+1] = dict()
+            maxData[i + 1] = dict()
         while data != '':
             data = data.split()
             actualMax = int(data[1])
@@ -2535,6 +2539,7 @@ class ComFile(object):
 class IrcFile(object):
 
     def __init__(self, listOfFiles):
+        global IRC_ONEFILE
         self.coords4RC = dict()
         self.reactionCoordinates = list()
         self.startConfig = list()  # müsste list sein
@@ -2543,10 +2548,12 @@ class IrcFile(object):
         if len(listOfFiles) == 1:
             inFileNamePartOne = listOfFiles[0]
             inFileNamePartTwo = str()
+            print('Eine irc log Datei')
         elif len(listOfFiles) == 2:
             IRC_ONEFILE = False
             inFileNamePartOne = listOfFiles[0]
             inFileNamePartTwo = listOfFiles[1]
+            print('Zwei irc log Dateien')
         else:
             inFileNamePartOne = input('Bitte geben den Pfad der .log Datei der irc Pfad Rechnung an:\n')
         self.inFileNamePartOne = inFileNamePartOne
@@ -2579,7 +2586,6 @@ class IrcFile(object):
 
     def getStartGeometry(self):
         startP, dict4input = self.getStartLines()
-
         for point in dict4input:
             pointNR, pathNr, reactionCoordinate = self.getInfos(point)
             self.coords4RC[reactionCoordinate] = self.getKoords(dict4input[point])
@@ -2661,6 +2667,7 @@ class IrcFile(object):
         return linesOutput
 
     def makePythonOutfile(self):
+        global SCIPYLOAD, IRC_ONEFILE, REAKTIONSSHIFT
         with open(self.outFileName, 'w') as outFile:
             outFile.write(BLENDER_CONTENT_HEADER)
             self.makeStartGeometryLines()
@@ -2669,10 +2676,10 @@ class IrcFile(object):
             outFile.write(BLENDER_CONTENT_PATHDATA)
             for line in self.getReaktionsPfadLines():
                 outFile.write(line)
+
             if not IRC_ONEFILE:
                 if SCIPYLOAD:
-                    if VERBOSE:
-                        print('starte mit zweiter Datei')
+                    print('starte mit zweiter Datei')
 
                     compareGeometry = self.coords4RC[0]
                     oldReactionsCoordinate = 0
@@ -2680,17 +2687,20 @@ class IrcFile(object):
                         if reaktionsKoordinate > oldReactionsCoordinate:
                             oldReactionsCoordinate = reaktionsKoordinate
                             compareGeometryPartTwo = self.coords4RC[reaktionsKoordinate]
-                    reaktionsKoordinatenShift += abs(reaktionsKoordinate)
-
-                    with open(inFileNamePartTwo, 'r') as inFile:
+                    reaktionsKoordinatenShift = abs(reaktionsKoordinate)
+                    reaktionsKoordinatenShift += REAKTIONSSHIFT
+                    with open(self.inFileNamePartTwo, 'r') as inFile:
                         self.allLines = inFile.readlines()
-                    getStartGeometry()
+
+                    self.coords4RC = dict()
+                    self.reactionCoordinates = list()
+                    self.getStartGeometry()
                     compareGeometryPartTwo = self.coords4RC[0]
                     oldReactionsCoordinate = 0
                     for reaktionsKoordinate in self.coords4RC:
                         if reaktionsKoordinate < oldReactionsCoordinate:
                             oldReactionsCoordinate = reaktionsKoordinate
-                            compareGeometryPartTwo = coords4RCTwo[reaktionsKoordinate]
+                            compareGeometryPartTwo = self.coords4RC[reaktionsKoordinate]
                     reaktionsKoordinatenShift += abs(reaktionsKoordinate)
 
                     # calc rot und move matrices --> min distance of coords of fist 6 atoms
@@ -2722,7 +2732,7 @@ class IrcFile(object):
                             line = str(n) + ' ' + str(vector[0]) + ' ' + str(vector[1]) + ' ' + str(vector[2]) + '\n'
                             outFile.write(line)
                         except ValueError:
-                            shift = float(line.split()[2]) + reactions_coordinate_shift
+                            shift = float(line.split()[2]) + reaktionsKoordinatenShift
                             line = 'reactions Coordinate: '
                             line += str(shift)
                             line += ' Energie: \n'
@@ -2740,7 +2750,8 @@ class IrcFile(object):
             overrideInput = input('Wollen Sie den Inhalt überschreiben? [j]/n ')
             if overrideInput.lower() in ('n', 'no', 'nein'):
                 print('Skript wird beendet.')
-                print('Hinweis: Die Dateien werden in dem Ordner mit dem Namen der .log Datei (ohne Endung) gespeichert')
+                print(
+                    'Hinweis: Die Dateien werden in dem Ordner mit dem Namen der .log Datei (ohne Endung) gespeichert')
                 exit(1)
         else:
             os.mkdir(self.baseFileName)
@@ -2813,10 +2824,10 @@ class RotTrans2Congruent(object):
                   [0, 1, 0],
                   [0, 0, 1]]
 
-    def __init__(self, start_points, target_points, print_output=False):
-        self.alt = start_points
-        self.neu = target_points
-        self.neu_u = target_points
+    def __init__(self, startPoints, targetPoints, print_output=False):
+        self.alt = startPoints
+        self.neu = targetPoints
+        self.neu_u = targetPoints
         self.print_output = print_output
 
     def matrix_multiplikation_3d(self, A, B):
@@ -3135,11 +3146,11 @@ class Orbital(object):
 
     def makeDictOfPosNegFacesAndVerts(self):
         self.dictOfFacesPos, self.dictOfVertsPos = self.makeDictOfFacesAndVerts(self.posOrbsFaces,
-                                                                           self.posOrbsVertices,
-                                                                           self.dSurfacePos)
+                                                                                self.posOrbsVertices,
+                                                                                self.dSurfacePos)
         self.dictOfFacesNeg, self.dictOfVertsNeg = self.makeDictOfFacesAndVerts(self.negOrbsFaces,
-                                                                           self.negOrbsVertices,
-                                                                           self.dSurfaceNeg)
+                                                                                self.negOrbsVertices,
+                                                                                self.dSurfaceNeg)
         pass
 
     def makeDictOfSurfaces(self, knoten=dict()):
@@ -3189,8 +3200,8 @@ class Orbital(object):
         return self.dictOfFacesNeg, self.dictOfVertsNeg
 
     def testStuff(self):
-        #check Anzahl Vertices mit max Wert von Faces
-        #get Anzahl vertices
+        # check Anzahl Vertices mit max Wert von Faces
+        # get Anzahl vertices
         result = True
         nVertsPos = dict()
         for s in self.dictOfVertsPos:
@@ -3198,7 +3209,7 @@ class Orbital(object):
         nVertsNeg = dict()
         for s in self.dictOfVertsNeg:
             nVertsNeg[s] = len(self.dictOfVertsNeg[s])
-        #get max Wert von Faces
+        # get max Wert von Faces
         maxVertPos = dict()
         for s in self.dictOfFacesPos:
             for p in self.dictOfFacesPos[s]:
@@ -3220,21 +3231,24 @@ if __name__ == '__main__':
     if len(todo) == 1:
         printHelp()
     try:
-        opts, inputFiles = getopt.getopt(sys.argv[1:], 'hvcid:gmxwao:', ['help',
-                                                                         'verbose',
-                                                                         'com',
-                                                                         'irc',
-                                                                         'direction=',
-                                                                         'graph',
-                                                                         'molpro',
-                                                                         'xyz',
-                                                                         'wellenfunktion',
-                                                                         'max',
-                                                                         'orbitals='])
+        opts, inputFiles = getopt.getopt(sys.argv[1:], 'hvcis:d:gmxwao:', ['help',
+                                                                           'verbose',
+                                                                           'com',
+                                                                           'irc',
+                                                                           'direction=',
+                                                                           'shift=',
+                                                                           'graph',
+                                                                           'molpro',
+                                                                           'xyz',
+                                                                           'wellenfunktion',
+                                                                           'max',
+                                                                           'orbitals='])
     except getopt.GetoptError:
         printHelp()
         sys.exit(2)
     # checking nach globalen optionen
+    print(opts)
+    print(inputFiles)
     for opt, arg in opts:
         if opt in ('-h', '--help'):
             printHelp()
@@ -3245,7 +3259,8 @@ if __name__ == '__main__':
                 IRC_DIRECTION = 1
             else:
                 IRC_DIRECTION = -1
-
+        elif opt in ('-s', '--shift'):
+            REAKTIONSSHIFT = int(arg)
     # checking nach jop type
     for opt, arg in opts:
         if opt in ('-c', '--com'):
@@ -3274,6 +3289,5 @@ if __name__ == '__main__':
         elif opt in ('-o', '--orbitals'):
             orbitalFile = OrbitalFile(arg)
             orbitalFile.makePythonOutput()
-
 
 

@@ -52,16 +52,5 @@ QuantumChemistryToBlender.py -d -1 -i Irc_teil-1.log Irc_teil-2.log
 QuantumChemistryToBlender.py -o 9,11-13 # TODO überprüfen mit dem -
 ```
 ### TODO
->+ merge all irc scripts to one
->  + irc to ...
->    + [x] Graph
->    + [x] Blender
->    + [x] Molpro
->    + [x] PSI4
->    + [x] Wellenfunktionen (molden)
->+ merge all blender scripts to one
->  + to blender 
->    + [x] from irc
->    + [x] max
->    + [x] com
->    + [x] orbitals from IboView
+> + in merged file: 
+> -x, -w, -m function with 2 files
